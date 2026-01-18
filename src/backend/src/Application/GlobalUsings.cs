@@ -1,0 +1,10 @@
+﻿global using Ardalis.GuardClauses;
+global using AutoMapper;
+global using AutoMapper.QueryableExtensions;
+global using FluentValidation;
+global using MediatR;
+global using Microsoft.EntityFrameworkCore;
+global using RealTimeAuction.Application.Common.Exceptions;
+global using RealTimeAuction.Application.Common.Interfaces;
+global using RealTimeAuction.Domain.Entities;
+global using RealTimeAuction.Domain.Enums;

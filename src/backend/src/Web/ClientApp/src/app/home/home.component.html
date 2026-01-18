@@ -1,0 +1,40 @@
+<div class="flex-grow flex flex-col items-center justify-center p-6 pt-32 pb-24 relative overflow-hidden bg-slate-950">
+
+  <div class="absolute inset-0 overflow-hidden pointer-events-none">
+    <div
+      class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-500/10 rounded-full blur-[120px] animate-pulse-slow">
+    </div>
+    <div
+      class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-500/10 rounded-full blur-[120px] animate-pulse-slow"
+      style="animation-delay: 2s;"></div>
+  </div>
+
+  <div class="container mx-auto px-4 text-center z-10">
+    <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 mb-8">
+      <span class="relative flex h-2 w-2">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+      </span>
+      <span class="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">Sua plataforma de leilão
+        online</span>
+    </div>
+
+    <h1 class="text-6xl md:text-8xl font-black mb-12 tracking-tighter text-white">
+      ARRE<span
+        class="text-transparent bg-clip-text bg-gradient-to-br from-indigo-400 via-purple-400 to-pink-500">MATCH</span>
+    </h1>
+
+    <div class="flex flex-col sm:flex-row justify-center gap-6 items-center">
+      <a [routerLink]="['/auctions']"
+        class="w-full sm:w-auto px-10 py-5 bg-white text-slate-950 font-black text-lg rounded-2xl shadow-xl hover:shadow-indigo-500/20 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center group">
+        Explorar Catálogo
+        <i class="bi bi-arrow-right ml-2 group-hover:translate-x-1 transition-transform"></i>
+      </a>
+
+      <a
+        class="w-full sm:w-auto px-10 py-5 text-white bg-white/5 hover:bg-white/10 border border-white/10 font-bold rounded-2xl transition-all cursor-pointer">
+        Saiba mais
+      </a>
+    </div>
+  </div>
+</div>

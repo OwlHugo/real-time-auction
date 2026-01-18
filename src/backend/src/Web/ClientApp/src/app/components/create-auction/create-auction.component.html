@@ -1,0 +1,83 @@
+<div class="flex-grow flex items-center justify-center py-16 px-4 bg-slate-950">
+  <div class="glass p-8 md:p-12 rounded-[2.5rem] w-full max-w-4xl border border-white/5 shadow-2xl">
+    <div class="mb-10 text-center md:text-left">
+      <h2 class="text-4xl font-black text-white mb-2 tracking-tighter uppercase">Painel de Criação</h2>
+      <p class="text-slate-400 font-medium">Configure os parâmetros do novo leilão.</p>
+    </div>
+
+    <form [formGroup]="auctionForm" (ngSubmit)="onSubmit()" class="space-y-8">
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div class="md:col-span-2 space-y-6">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-3 ml-1">Título do
+              Item</label>
+            <input type="text" formControlName="title"
+              class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition outline-none placeholder-slate-600"
+              placeholder="Ex: PlayStation 5 Edição Limitada">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-3 ml-1">Descrição
+              Detalhada</label>
+            <textarea formControlName="description" rows="5"
+              class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition outline-none placeholder-slate-600 resize-none"
+              placeholder="Descreva o item, estado de conservação e regras específicas..."></textarea>
+          </div>
+        </div>
+
+        <div class="space-y-6">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-3 ml-1">Preço Inicial
+              ($)</label>
+            <input type="number" formControlName="startingPrice"
+              class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white focus:border-indigo-500 transition outline-none font-mono text-lg">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-3 ml-1">Reserva
+              ($)</label>
+            <input type="number" formControlName="reservePrice"
+              class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white focus:border-indigo-500 transition outline-none placeholder-slate-600 font-mono text-lg"
+              placeholder="0.00">
+          </div>
+        </div>
+      </div>
+
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t border-white/5">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-3 ml-1">Data de
+            Início</label>
+          <input type="datetime-local" formControlName="startTime"
+            class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white focus:border-indigo-500 transition outline-none date-input-dark">
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-3 ml-1">Data de
+            Encerramento</label>
+          <input type="datetime-local" formControlName="endTime"
+            class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white focus:border-indigo-500 transition outline-none date-input-dark">
+        </div>
+      </div>
+
+      <div *ngIf="errorMessage"
+        class="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-500 text-sm text-center animate-pulse">
+        {{ errorMessage }}
+      </div>
+
+      <div class="pt-6">
+        <button type="submit" [disabled]="!auctionForm.valid || isSubmitting"
+          class="w-full py-5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-lg tracking-[0.1em] shadow-2xl shadow-indigo-500/20 transition-all transform hover:-translate-y-1 disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed uppercase flex items-center justify-center">
+          <span *ngIf="!isSubmitting">Publicar Leilão</span>
+          <span *ngIf="isSubmitting" class="flex items-center">
+            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+              </path>
+            </svg>
+            Publicando...
+          </span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
