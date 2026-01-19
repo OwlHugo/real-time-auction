@@ -68,7 +68,12 @@ Instead of processing everything in the request thread (blocking the user):
     ```
 
 4.  **Run the Frontend:**
-    The frontend is integrated into the ASP.NET Core project proxy, but you can run it separately:
+    The frontend is automatically launched by the ASP.NET Core backend.
+
+    *   Wait for the line: `Angular Live Development Server is listening on localhost:44447`
+    *   Access the app at: `https://localhost:44447`
+
+    *(Optional) To run independently:*
     ```bash
     cd src/Web/ClientApp
     npm install
