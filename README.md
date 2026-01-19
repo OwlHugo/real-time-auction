@@ -64,14 +64,13 @@ Instead of processing everything in the request thread (blocking the user):
 
 3.  **Run the Backend:**
     ```bash
-    cd src/backend
     dotnet run --project src/Web/Web.csproj
     ```
 
 4.  **Run the Frontend:**
     The frontend is integrated into the ASP.NET Core project proxy, but you can run it separately:
     ```bash
-    cd src/web/ClientApp
+    cd src/Web/ClientApp
     npm install
     npm start
     ```
