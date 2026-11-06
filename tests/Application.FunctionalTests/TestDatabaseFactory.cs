@@ -1,11 +1,10 @@
-﻿namespace RealTimeAuction.Application.FunctionalTests;
+namespace RealTimeAuction.Application.FunctionalTests;
 
 public static class TestDatabaseFactory
 {
     public static async Task<ITestDatabase> CreateAsync()
     {
-        // Testcontainers requires Docker. To use a local SQL Server database instead,
-        // switch to `SqlTestDatabase` and update appsettings.json.
+        // Requer Docker (Testcontainers sobe um PostgreSQL descartável).
         var database = new SqlTestcontainersTestDatabase();
 
         await database.InitialiseAsync();

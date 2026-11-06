@@ -13,40 +13,57 @@ public class AuctionHubService : IAuctionHubService
         _hubContext = hubContext;
     }
 
-    public async Task NotifyBidPlaced(
-        int auctionId,
-        int bidId,
-        decimal amount,
-        string bidderId,
-        DateTime timestamp
-    )
-    {
-        await _hubContext
-            .Clients.Group($"auction-{auctionId}")
+    private IClientProxy Group(int auctionId) =>
+        _hubContext.Clients.Group(AuctionHub.GroupName(auctionId));
+
+    public Task NotifyBidPlaced(BidPlacedNotification n) =>
+        Group(n.AuctionId)
             .SendAsync(
                 "BidPlaced",
                 new
                 {
-                    BidId = bidId,
-                    AuctionId = auctionId,
-                    Amount = amount,
-                    BidderId = bidderId,
-                    Timestamp = timestamp,
+                    n.BidId,
+                    n.AuctionId,
+                    n.Amount,
+                    n.BidderId,
+                    n.BidderName,
+                    n.Sequence,
+                    n.Timestamp,
                 }
             );
-    }
 
-    public async Task NotifyAuctionStarted(int auctionId)
-    {
-        await _hubContext
-            .Clients.Group($"auction-{auctionId}")
-            .SendAsync("AuctionStarted", new { AuctionId = auctionId });
-    }
+    public Task NotifyBidRejected(int auctionId, decimal amount, string bidderName, string reason) =>
+        Group(auctionId)
+            .SendAsync(
+                "BidRejected",
+                new
+                {
+                    AuctionId = auctionId,
+                    Amount = amount,
+                    BidderName = bidderName,
+                    Reason = reason,
+                    Timestamp = DateTime.UtcNow,
+                }
+            );
 
-    public async Task NotifyAuctionEnded(int auctionId, string? winnerId)
-    {
-        await _hubContext
-            .Clients.Group($"auction-{auctionId}")
-            .SendAsync("AuctionEnded", new { AuctionId = auctionId, WinnerId = winnerId });
-    }
+    public Task NotifyAuctionStarted(int auctionId) =>
+        Group(auctionId).SendAsync("AuctionStarted", new { AuctionId = auctionId });
+
+    public Task NotifyAuctionEnded(
+        int auctionId,
+        string? winnerId,
+        string? winnerName,
+        decimal finalPrice
+    ) =>
+        Group(auctionId)
+            .SendAsync(
+                "AuctionEnded",
+                new
+                {
+                    AuctionId = auctionId,
+                    WinnerId = winnerId,
+                    WinnerName = winnerName,
+                    FinalPrice = finalPrice,
+                }
+            );
 }

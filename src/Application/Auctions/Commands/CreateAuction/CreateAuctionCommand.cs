@@ -46,6 +46,7 @@ public class CreateAuctionCommandHandler : IRequestHandler<CreateAuctionCommand,
             StartTime = request.StartTime,
             EndTime = request.EndTime,
             SellerId = _currentUser.Id!,
+            SellerName = _currentUser.DisplayName ?? "Anônimo",
             Status = AuctionStatus.Scheduled,
         };
 

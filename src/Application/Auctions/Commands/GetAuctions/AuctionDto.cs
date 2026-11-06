@@ -15,12 +15,16 @@ public class AuctionDto
     public DateTime EndTime { get; init; }
     public AuctionStatus Status { get; init; }
     public string SellerId { get; init; } = string.Empty;
+    public string SellerName { get; init; } = string.Empty;
+    public long Sequence { get; init; }
+    public int BidCount { get; init; }
 
     private class Mapping : Profile
     {
         public Mapping()
         {
-            CreateMap<Auction, AuctionDto>();
+            CreateMap<Auction, AuctionDto>()
+                .ForMember(d => d.BidCount, opt => opt.MapFrom(s => (int)s.Sequence));
         }
     }
 }

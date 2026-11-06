@@ -1,18 +1,34 @@
+using NotFoundException = RealTimeAuction.Application.Common.Exceptions.NotFoundException;
+using ValidationException = RealTimeAuction.Application.Common.Exceptions.ValidationException;
+
 namespace RealTimeAuction.Application.Auctions.Commands.PlaceBid;
 
-public record PlaceBidCommand : IRequest<int>
+public record PlaceBidCommand : IRequest<PlaceBidResult>
 {
-    public int AuctionId { get; set; }
-    public decimal Amount { get; set; }
+    public int AuctionId { get; init; }
+    public decimal Amount { get; init; }
 }
 
-public class PlaceBidCommandHandler : IRequestHandler<PlaceBidCommand, int>
+public record PlaceBidResult(int Id, int AuctionId, decimal Amount, long Sequence, DateTime PlacedAt);
+
+public class PlaceBidCommandHandler : IRequestHandler<PlaceBidCommand, PlaceBidResult>
 {
+    public const decimal MinimumIncrement = 10m;
+
+    private static string FormatBrl(decimal value) =>
+        value.ToString("C2", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"));
+
     private readonly IApplicationDbContext _context;
     private readonly IUser _currentUser;
+    private readonly IAuctionHubService _hub;
+
     private static readonly Prometheus.Counter BidsCounter = Prometheus.Metrics.CreateCounter(
         "app_bids_total",
-        "Total de lances recebidos"
+        "Total de lances aceitos"
+    );
+    private static readonly Prometheus.Counter ConflictsCounter = Prometheus.Metrics.CreateCounter(
+        "app_bid_conflicts_total",
+        "Lances rejeitados por conflito de concorrência (controle otimista)"
     );
     private static readonly Prometheus.Histogram BidAmountHistogram =
         Prometheus.Metrics.CreateHistogram(
@@ -24,69 +40,115 @@ public class PlaceBidCommandHandler : IRequestHandler<PlaceBidCommand, int>
             }
         );
 
-    public PlaceBidCommandHandler(IApplicationDbContext context, IUser currentUser)
+    public PlaceBidCommandHandler(
+        IApplicationDbContext context,
+        IUser currentUser,
+        IAuctionHubService hub
+    )
     {
         _context = context;
         _currentUser = currentUser;
+        _hub = hub;
     }
 
-    public async Task<int> Handle(PlaceBidCommand request, CancellationToken cancellationToken)
+    public async Task<PlaceBidResult> Handle(
+        PlaceBidCommand request,
+        CancellationToken cancellationToken
+    )
     {
-        var auction = await _context
-            .Auctions.Include(a => a.Bids)
-            .FirstOrDefaultAsync(a => a.Id == request.AuctionId, cancellationToken);
+        var bidderId = _currentUser.Id ?? throw new UnauthorizedAccessException();
+        var bidderName = _currentUser.DisplayName ?? "Anônimo";
+
+        // Lê o leilão junto com sua versão (RowVersion). Nenhum lock é mantido aqui:
+        // a exclusão mútua acontece no UPDATE condicional feito pelo SaveChanges.
+        var auction = await _context.Auctions.FirstOrDefaultAsync(
+            a => a.Id == request.AuctionId,
+            cancellationToken
+        );
 
         if (auction == null)
         {
-            throw new RealTimeAuction.Application.Common.Exceptions.NotFoundException(
-                "Leilão não encontrado"
+            throw new NotFoundException(nameof(Auction), request.AuctionId);
+        }
+
+        if (auction.SellerId == bidderId)
+        {
+            throw new ForbiddenAccessException("Você não pode dar lance no seu próprio leilão.");
+        }
+
+        if (!auction.IsActive())
+        {
+            throw new ValidationException("Este leilão não está aberto para lances.");
+        }
+
+        if (request.Amount < auction.CurrentPrice + MinimumIncrement)
+        {
+            throw new ValidationException(
+                $"O lance deve ser pelo menos {FormatBrl(MinimumIncrement)} maior que o preço atual ({FormatBrl(auction.CurrentPrice)})."
             );
         }
 
-        const decimal minimumIncrement = 10m;
-        if (request.Amount < auction.CurrentPrice + minimumIncrement)
+        var previousWinners = await _context
+            .Bids.Where(b => b.AuctionId == auction.Id && b.Status == BidStatus.Accepted)
+            .ToListAsync(cancellationToken);
+        foreach (var previous in previousWinners)
         {
-            throw new RealTimeAuction.Application.Common.Exceptions.ValidationException(
-                $"O lance deve ser pelo menos R$ {minimumIncrement} maior que o preço atual (R$ {auction.CurrentPrice})"
-            );
+            previous.Status = BidStatus.Outbid;
         }
 
-        if (!auction.CanPlaceBid(request.Amount))
-        {
-            throw new RealTimeAuction.Application.Common.Exceptions.ValidationException(
-                "Valor do lance deve ser maior que o preço atual e leilão deve estar ativo"
-            );
-        }
+        var now = DateTime.UtcNow;
+        auction.CurrentPrice = request.Amount;
+        auction.Sequence++;
 
         var bid = new Bid
         {
-            AuctionId = request.AuctionId,
-            BidderId = _currentUser.Id!,
+            AuctionId = auction.Id,
+            BidderId = bidderId,
+            BidderName = bidderName,
             Amount = request.Amount,
-            PlaceAt = DateTime.UtcNow,
+            PlaceAt = now,
             Status = BidStatus.Accepted,
+            Sequence = auction.Sequence,
         };
-
-        var previousBid = auction.Bids.Where(b => b.Status == BidStatus.Accepted);
-        foreach (var prevBid in previousBid)
-        {
-            prevBid.Status = BidStatus.Outbid;
-        }
-        auction.CurrentPrice = request.Amount;
         _context.Bids.Add(bid);
+
         try
         {
+            // UPDATE "Auctions" SET ..., "RowVersion" = @nova WHERE "Id" = @id AND "RowVersion" = @lida
+            // + INSERT do lance, tudo na mesma transação. Se outro lance gravou antes,
+            // 0 linhas são afetadas → DbUpdateConcurrencyException → rollback completo.
             await _context.SaveChangesAsync(cancellationToken);
-
-            BidsCounter.Inc();
-            BidAmountHistogram.Observe((double)request.Amount);
         }
         catch (DbUpdateConcurrencyException)
         {
-            throw new RealTimeAuction.Application.Common.Exceptions.ValidationException(
-                "O preço do leilão mudou enquanto você tentava dar o lance. Tente novamente."
+            ConflictsCounter.Inc();
+            await _hub.NotifyBidRejected(
+                auction.Id,
+                request.Amount,
+                bidderName,
+                "Outro lance foi gravado primeiro"
+            );
+            throw new ConflictException(
+                "Outro participante deu um lance no mesmo instante e chegou primeiro. Confira o novo preço e tente de novo."
             );
         }
-        return bid.Id;
+
+        BidsCounter.Inc();
+        BidAmountHistogram.Observe((double)request.Amount);
+
+        // Só notifica DEPOIS do commit: nenhum celular vê um lance que não existe no banco.
+        await _hub.NotifyBidPlaced(
+            new BidPlacedNotification(
+                auction.Id,
+                bid.Id,
+                bid.Amount,
+                bidderId,
+                bidderName,
+                bid.Sequence,
+                now
+            )
+        );
+
+        return new PlaceBidResult(bid.Id, auction.Id, bid.Amount, bid.Sequence, now);
     }
 }

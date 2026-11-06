@@ -2,12 +2,18 @@ export interface Auction {
   id: number;
   title: string;
   description: string;
+  startingPrice?: number;
   currentPrice: number;
   startTime: Date;
   endTime: Date;
   status: AuctionStatus;
+  /** Relógio lógico do leilão: sobe a cada lance aceito pelo servidor. */
+  sequence?: number;
   bidCount: number;
-  seller?: string;
+  sellerId?: string;
+  sellerName?: string;
+  winnerId?: string | null;
+  winnerName?: string | null;
   recentBids?: Bid[];
 }
 
@@ -26,4 +32,28 @@ export interface Bid {
   placeAt: Date;
   bidderId?: string;
   bidderName?: string;
+  sequence?: number;
+}
+
+/** Payload do evento "BidPlaced" enviado pelo hub. */
+export interface BidPlacedEvent {
+  auctionId: number;
+  bidId: number;
+  amount: number;
+  bidderId: string;
+  bidderName: string;
+  sequence: number;
+  timestamp: string;
+}
+
+export interface AuctionEndedEvent {
+  auctionId: number;
+  winnerId: string | null;
+  winnerName: string | null;
+  finalPrice: number;
+}
+
+export interface PresenceEvent {
+  auctionId: number;
+  viewers: number;
 }

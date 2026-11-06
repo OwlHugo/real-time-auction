@@ -135,5 +135,6 @@ public abstract class IntegrationTestBase
 public class TestUser : RealTimeAuction.Application.Common.Interfaces.IUser
 {
     public string? Id => "test-user-id";
+    public string? DisplayName => "Teste";
     public List<string>? Roles => new() { "TestRole" };
 }

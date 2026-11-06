@@ -22,7 +22,8 @@ public class GetAuctionByIdQueryHandler : IRequestHandler<GetAuctionByIdQuery, A
     )
     {
         var auction = await _context
-            .Auctions.Include(a => a.Bids.OrderByDescending(b => b.PlaceAt).Take(10))
+            .Auctions.AsNoTracking()
+            .Include(a => a.Bids.OrderByDescending(b => b.Sequence).Take(10))
             .FirstOrDefaultAsync(a => a.Id == request.Id, cancellationToken);
 
         if (auction == null)

@@ -1,11 +1,9 @@
-using Microsoft.AspNetCore.SignalR;
+using MediatR;
 using RealTimeAuction.Application.Auctions.Commands.CreateAuction;
 using RealTimeAuction.Application.Auctions.Commands.GetAuctionById;
 using RealTimeAuction.Application.Auctions.Commands.GetAuctions;
 using RealTimeAuction.Application.Auctions.Commands.PlaceBid;
-using RealTimeAuction.Application.Common.Interfaces;
 using RealTimeAuction.Application.Common.Models;
-using RealTimeAuction.Web.Hubs;
 using RealTimeAuction.Web.Infrastructure.Idempotency;
 
 namespace RealTimeAuction.Web.Endpoints;
@@ -17,7 +15,9 @@ public class Auctions : EndpointGroupBase
         group.MapGet("/", GetAuctions);
         group.MapGet("/{id}", GetAuctionById);
         group.MapPost("/", CreateAuction).RequireAuthorization();
-        group.MapPost("/{id}/bids", PlaceBid).RequireAuthorization();
+        group.MapPost("/{id}/bids", PlaceBid)
+            .RequireAuthorization()
+            .AddEndpointFilter<IdempotencyFilter>();
     }
 
     public async Task<PaginatedList<AuctionDto>> GetAuctions(
@@ -39,20 +39,9 @@ public class Auctions : EndpointGroupBase
         return Results.Created($"/api/auctions/{id}", new { Id = id });
     }
 
-    [Idempotent]
-    public async Task<IResult> PlaceBid(
-        ISender sender,
-        IAuctionHubService hubService,
-        IUser user,
-        int id,
-        PlaceBidCommand command
-    )
+    public async Task<IResult> PlaceBid(ISender sender, int id, PlaceBidCommand command)
     {
-        var bidId = await sender.Send(command with { AuctionId = id });
-        var bidderId = user.Id ?? "System";
-
-        await hubService.NotifyBidPlaced(id, bidId, command.Amount, bidderId, DateTime.UtcNow);
-
-        return Results.Created($"/api/auctions/{id}/bids/{bidId}", new { Id = bidId });
+        var result = await sender.Send(command with { AuctionId = id });
+        return Results.Created($"/api/auctions/{id}/bids/{result.Id}", result);
     }
 }

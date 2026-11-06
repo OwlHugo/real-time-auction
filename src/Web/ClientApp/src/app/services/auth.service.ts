@@ -14,7 +14,8 @@ export class AuthService {
   public currentUser$ = this.currentUserSubject.asObservable();
 
   constructor(private http: HttpClient) {
-    this.checkAuth().subscribe();
+    // Visitante sem login recebe 401 aqui: é esperado, então não é erro para o console.
+    this.checkAuth().subscribe({ error: () => {} });
   }
 
   checkAuth(): Observable<any> {

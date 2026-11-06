@@ -1,98 +1,104 @@
-# Arrematch - Real-Time Auction Platform 🚀
+# Arrematch - Leilões em Tempo Real
 
-A high-performance, distributed auction platform built to demonstrate advanced software engineering concepts using **.NET 10** and **Angular**.
+Aplicação web distribuída de leilões. Vários celulares dão lances no mesmo leilão ao mesmo tempo, e o sistema garante que só um lance vence, que todos veem o preço atualizado e que o leilão encerra sozinho com um vencedor.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![.NET](https://img.shields.io/badge/.NET-10.0-purple)](https://dotnet.microsoft.com/)
-[![Angular](https://img.shields.io/badge/Angular-19-red)](https://angular.io/)
-[![RabbitMQ](https://img.shields.io/badge/RabbitMQ-Messaging-orange)](https://www.rabbitmq.com/)
+## Stack
 
-## 🏗️ Technical Stack
+- **Backend:** .NET 10 (ASP.NET Core Minimal API + SignalR), Clean Architecture, CQRS com MediatR
+- **Frontend:** Angular 18 + Tailwind (SPA servida pelo próprio backend em produção)
+- **Banco:** PostgreSQL com EF Core (controle otimista via `RowVersion`)
+- **Redis:** backplane do SignalR, contagem de espectadores e chaves de idempotência
+- **RabbitMQ:** MassTransit, para o evento de "leilão ganho" (fila `email-queue`)
+- **Observabilidade:** Prometheus (`/metrics`) e Grafana
 
-This project leverages a modern, distributed stack designed for resilience and scale:
+## Os três problemas de computação distribuída
 
-*   **Backend:** .NET 10 (ASP.NET Core Web API)
-*   **Frontend:** Angular (SPA) with TailwindCSS
-*   **Real-time Communication:** SignalR with Redis Backplane (optimistic scaling)
-*   **Messaging & Event-Driven Architecture:** MassTransit with RabbitMQ
-*   **Database:** PostgreSQL with EF Core
-*   **Observability:** Prometheus & Grafana metrics
-*   **Architecture:** Clean Architecture + CQRS (Command Query Responsibility Segregation)
+### 1. Sincronização e exclusão mútua
+Quando vários celulares dão lance no mesmo leilão, só um pode vencer.
+- O leilão tem um `RowVersion` (`src/Domain/Entities/Auction.cs`). O `SaveChanges` gera uma versão nova a cada alteração (`src/Infrastructure/Data/ApplicationDbContext.cs`), e o EF faz o UPDATE com `WHERE RowVersion = <versão lida>`.
+- Se outro lance gravou antes, nenhuma linha é afetada, o EF lança `DbUpdateConcurrencyException`, a transação inteira é desfeita e a API responde **409**.
+- Nenhum lock fica preso entre requisições, então o sistema escala com mais nós.
+- Teste: 7 lances simultâneos de valor igual → 1 aceito, 6 com 409.
 
-## ⚡ Key Engineering Challenges Solved
+### 2. Comunicação distribuída
+- **Tempo real:** SignalR com um grupo por leilão. O lance é anunciado **depois do commit**, então ninguém vê um lance que não existe no banco.
+- **Entre instâncias:** o backplane do Redis faz o evento sair de qualquer nó e chegar a todos os clientes conectados, em qualquer nó (testado com duas instâncias em portas diferentes).
+- **Presença:** o número de espectadores fica num conjunto no Redis, então conta conexões de todos os nós.
+- **Assíncrona:** ao fim do leilão, o evento `AuctionWonEvent` vai para o RabbitMQ.
 
-This isn't just a CRUD application. It tackles complex distributed system problems:
+### 3. Consistência de dados
+- **Forte no banco:** a regra de lance e a gravação são atômicas (um único `SaveChanges`).
+- **Eventual nos celulares, com detecção de lacunas:** cada lance recebe um número de sequência por leilão (um relógio lógico). O cliente ignora sequências repetidas ou antigas, e se pular uma (perdeu mensagem) ou reconectar, busca o estado oficial no servidor.
+- **Idempotência:** o cabeçalho `X-Idempotency-Key` garante que um reenvio (duplo clique, rede instável) não cria dois lances. A chave é reservada com `SET NX` no Redis, então funciona entre instâncias. Repetir a mesma chave devolve a mesma resposta.
+- **Encerramento seguro com várias instâncias:** cada instância roda o worker de abertura/encerramento, mas cada leilão é gravado com `RowVersion`. Só uma consegue fechar o leilão e anunciar o vencedor.
 
-### 1. Concurrency & Race Conditions 🏁
-In an auction, milliseconds matter. To prevent two users from placing the same bid simultaneously:
-*   Implemented **Optimistic Concurrency Control** using `RowVersion` within PostgreSQL.
-*   The database rejects conflicting updates at the transaction level, ensuring data integrity without locking the entire table.
+## Como rodar
 
-### 2. Idempotency 🔄
-Network failures can cause requests to be retried.
-*   Custom **Idempotency Filters** prevent the execution of the same bid or payment operation multiple times.
-*   Uses a unique `X-Idempotency-Key` header tracked in a distributed cache.
+### Pré-requisitos
+- Docker e Docker Compose
+- .NET 10 SDK
+- Node.js 20+ e npm
 
-### 3. Eventual Consistency & Resilience 📉
-Instead of processing everything in the request thread (blocking the user):
-*   Heavy operations (like auction closure and email notifications) are offloaded to background workers via **RabbitMQ**.
-*   The system remains responsive even under high load.
+### 1. Infraestrutura
+```bash
+docker compose up -d postgres redis rabbitmq
+```
 
-### 4. Real-Time Updates 📡
-*   **SignalR** pushes live bid updates to all connected clients instantly.
-*   No "refresh page" needed. The UI updates the price and notifies if you've been outbid in real-time.
+> Se você já rodou uma versão anterior deste projeto, apague o volume do banco antes (`docker compose down -v`). O banco é criado com `EnsureCreated`, que não altera tabelas existentes.
 
-## 🚀 How to Run Locally
+### 2. Frontend (build de produção)
+```bash
+cd src/Web/ClientApp
+npm ci
+npx ng build --configuration production
+cd ../../..
+```
 
-### Prerequisites
-*   Docker & Docker Compose
-*   .NET 10 SDK
-*   Node.js & NPM
+### 3. Backend
+```bash
+ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://localhost:5000 \
+  dotnet run --project src/Web/Web.csproj
+```
+Abra `http://localhost:5000`. Em desenvolvimento (`dotnet run` sem o `ASPNETCORE_ENVIRONMENT=Production`), o Angular roda pelo proxy de desenvolvimento em `https://localhost:44447`, como antes.
 
-### Steps
+### 4. Celulares na mesma demo
+Os celulares precisam acessar o servidor pela rede. Use um túnel HTTPS, por exemplo:
+```bash
+cloudflared tunnel --url http://localhost:5000
+```
+Mostre a URL `https://...` gerada num QR code no slide. Cada participante cria a própria conta em **Entrar → Registre-se**.
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/YOUR_USERNAME/real-time-auction.git
-    cd real-time-auction
-    ```
+### 5. Demonstrar duas instâncias (distribuição)
+```bash
+INSTANCE_NAME=no-A ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://localhost:5000 dotnet run --project src/Web/Web.csproj
+INSTANCE_NAME=no-B ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://localhost:5001 dotnet run --project src/Web/Web.csproj
+```
+Um celular em `:5000` e outro em `:5001` acompanhando o mesmo leilão: o lance feito em um aparece no outro. `GET /api/server-info` mostra qual nó respondeu.
 
-2.  **Start Infrastructure (Postgres, RabbitMQ, Redis):**
-    ```bash
-    docker-compose up -d
-    ```
+## Testes
 
-3.  **Run the Backend:**
-    ```bash
-    dotnet run --project src/Web/Web.csproj
-    ```
+```bash
+dotnet test tests/Domain.UnitTests
+dotnet test tests/Application.UnitTests
+# Requer Docker (Testcontainers sobe PostgreSQL, Redis e RabbitMQ descartáveis):
+dotnet test tests/Infrastructure.IntegrationTests
+dotnet test tests/Application.FunctionalTests
+```
 
-4.  **Run the Frontend:**
-    The frontend is automatically launched by the ASP.NET Core backend.
+## Limitações conhecidas
 
-    *   Wait for the line: `Angular Live Development Server is listening on localhost:44447`
-    *   Access the app at: `https://localhost:44447`
+- **Publicação no RabbitMQ é "melhor esforço":** se o broker cair exatamente no momento do encerramento, o evento de vencedor pode não sair. O encerramento em si é gravado e anunciado normalmente. Para garantia total seria preciso um *transactional outbox*.
+- **E-mail ao vencedor é simulado** (o consumidor só registra no log).
+- **Espectadores contam conexões**, não pessoas distintas.
+- **Usuário admin de exemplo** (`administrator@localhost`) é criado com senha conhecida. Troque antes de expor o sistema na internet.
 
-    *(Optional) To run independently:*
-    ```bash
-    cd src/Web/ClientApp
-    npm install
-    npm start
-    ```
+## Observabilidade
 
-5.  **Access:**
-    Open `https://localhost:5001` (or the port indicated in your console).
+Métricas em `/metrics`:
+- `app_bids_total`: lances aceitos
+- `app_bid_conflicts_total`: lances perdidos por conflito de concorrência
+- `app_bid_amount`: distribuição dos valores
 
-## 📊 Observability
+## Licença
 
-The application exposes metrics at `/metrics` for Prometheus.
-*   **`app_bids_total`**: Counter for total bids received.
-*   **`app_bid_amount`**: Histogram of bid values.
-
-## 🤝 Contribution
-
-Feel free to open issues or PRs if you want to discuss distributed architecture or .NET optimizations!
-
-## 📜 License
-
-This project is licensed under the MIT License.
+MIT

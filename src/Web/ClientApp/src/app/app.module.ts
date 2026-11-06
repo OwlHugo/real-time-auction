@@ -1,3 +1,5 @@
+import { registerLocaleData } from '@angular/common';
+import localePt from '@angular/common/locales/pt';
 import { HTTP_INTERCEPTORS, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { APP_ID, NgModule } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -15,6 +17,8 @@ import { AuctionListComponent } from './components/auction-list/auction-list.com
 import { CreateAuctionComponent } from './components/create-auction/create-auction.component';
 import { LoginComponent } from './components/login/login.component';
 import { RegisterComponent } from './components/register/register.component';
+
+registerLocaleData(localePt, 'pt-BR');
 
 @NgModule({
   declarations: [

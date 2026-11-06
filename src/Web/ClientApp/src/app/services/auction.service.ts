@@ -4,6 +4,21 @@ import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Auction } from '../models/auction.model';
 
+/** Chave única por tentativa de lance: o servidor devolve a mesma resposta em um reenvio. */
+export function newIdempotencyKey(): string {
+  const c = (globalThis as any).crypto;
+  if (c?.randomUUID) return c.randomUUID();
+  return `k-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+export interface PlaceBidResponse {
+  id: number;
+  auctionId: number;
+  amount: number;
+  sequence: number;
+  placedAt: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -36,7 +51,14 @@ export class AuctionService {
     return this.http.post(this.apiUrl, auction, { withCredentials: true });
   }
 
-  placeBid(auctionId: number, amount: number): Observable<any> {
-    return this.http.post(`${this.apiUrl}/${auctionId}/bids`, { amount }, { withCredentials: true });
+  placeBid(auctionId: number, amount: number, idempotencyKey: string): Observable<PlaceBidResponse> {
+    return this.http.post<PlaceBidResponse>(
+      `${this.apiUrl}/${auctionId}/bids`,
+      { amount },
+      {
+        withCredentials: true,
+        headers: { 'X-Idempotency-Key': idempotencyKey }
+      }
+    );
   }
 }
