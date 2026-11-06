@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using RealTimeAuction.Application.Common.Exceptions;
 
@@ -19,6 +19,7 @@ public class CustomExceptionHandler : IExceptionHandler
             },
             { typeof(UnauthorizedAccessException), HandleUnauthorizedAccessException },
             { typeof(ForbiddenAccessException), HandleForbiddenAccessException },
+            { typeof(ConflictException), HandleConflictException },
         };
     }
 
@@ -97,6 +98,24 @@ public class CustomExceptionHandler : IExceptionHandler
                 Status = StatusCodes.Status403Forbidden,
                 Title = "Forbidden",
                 Type = "https://tools.ietf.org/html/rfc7231#section-6.5.3",
+                Detail = string.IsNullOrEmpty(ex.Message) || ex.Message.StartsWith("Exception of type")
+                    ? null
+                    : ex.Message,
+            }
+        );
+    }
+
+    private async Task HandleConflictException(HttpContext httpContext, Exception ex)
+    {
+        httpContext.Response.StatusCode = StatusCodes.Status409Conflict;
+
+        await httpContext.Response.WriteAsJsonAsync(
+            new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Conflito de concorrência",
+                Type = "https://tools.ietf.org/html/rfc7231#section-6.5.8",
+                Detail = ex.Message,
             }
         );
     }

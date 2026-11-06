@@ -33,7 +33,7 @@
       <PackageReference Include="Moq" />
       <PackageReference Include="Respawn" />
       <PackageReference Include="Shouldly" />
-      <PackageReference Include="Testcontainers.MsSql" />
+      <PackageReference Include="Testcontainers.PostgreSql" />
     </ItemGroup>
     
     <ItemGroup>

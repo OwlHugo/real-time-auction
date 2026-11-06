@@ -14,6 +14,19 @@
     <i class="bi bi-arrow-left mr-2 group-hover:-translate-x-1 transition"></i> Voltar para Lista
   </a>
 
+  <div class="flex items-center gap-4 mb-6 text-xs font-bold uppercase tracking-widest">
+    <span class="px-3 py-1 rounded-full"
+      [ngClass]="liveState === 'live' ? 'bg-green-500/20 text-green-400' : (liveState === 'reconnecting' || liveState === 'connecting' ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400')">
+      {{ liveState === 'live' ? 'Ao vivo' : (liveState === 'offline' ? 'Offline' : 'Reconectando…') }}
+    </span>
+    <span class="text-slate-400"><i class="bi bi-eye mr-1"></i>{{ viewers }} assistindo</span>
+  </div>
+
+  <div *ngIf="notice"
+    class="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-400 text-sm text-center">
+    {{ notice }}
+  </div>
+
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
     <div class="glass p-8 rounded-3xl relative overflow-hidden flex flex-col justify-between">
       <div
@@ -30,7 +43,7 @@
       <div class="grid grid-cols-2 gap-4 mt-auto">
         <div class="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50">
           <p class="text-xs text-slate-500 uppercase tracking-widest mb-1">Vendedor</p>
-          <p class="font-bold text-slate-800 dark:text-slate-200 truncate">{{ auction.seller || 'Anônimo' }}</p>
+          <p class="font-bold text-slate-800 dark:text-slate-200 truncate">{{ auction.sellerName || 'Anônimo' }}</p>
         </div>
         <div class="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50">
           <p class="text-xs text-slate-500 uppercase tracking-widest mb-1">Tempo Restante</p>
@@ -49,8 +62,8 @@
       <div class="relative z-10 text-center">
         <p class="text-sm text-slate-500 uppercase tracking-[0.2em] mb-4 font-semibold">Lance Atual</p>
         <h2
-          class="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-500 mb-8 drop-shadow-sm">
-          {{ auction.currentPrice | currency }}
+          class="text-5xl sm:text-7xl font-black break-words text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-500 mb-8 drop-shadow-sm">
+          {{ auction.currentPrice | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}
         </h2>
 
         <div class="w-24 h-1 bg-gradient-to-r from-transparent via-slate-700 to-transparent mx-auto mb-8 rounded-full">
@@ -62,8 +75,8 @@
               <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Sua
                 Oferta</label>
               <div class="relative">
-                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
-                <input type="number" [(ngModel)]="bidAmount" [min]="auction.currentPrice + 1"
+                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">R$</span>
+                <input type="number" [(ngModel)]="bidAmount" [min]="auction.currentPrice + 10" step="10"
                   class="w-full bg-slate-900 border border-slate-700 rounded-2xl pl-8 pr-4 py-4 text-white focus:border-indigo-500 outline-none transition font-mono text-xl">
               </div>
             </div>
@@ -75,7 +88,7 @@
           </div>
 
           <button (click)="placeBid()"
-            [disabled]="bidAmount <= auction.currentPrice || auction.status !== 2 || isSubmittingBid"
+            [disabled]="!canBid"
             class="w-full py-5 rounded-2xl bg-gradient-to-r from-indigo-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white font-black text-xl tracking-wide shadow-xl shadow-indigo-500/30 transition-all transform hover:-translate-y-1 active:scale-95 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center">
             <span *ngIf="!isSubmittingBid">{{ auction.status === 2 ? 'ENVIAR LANCE' : (auction.status === 3 ? 'LEILÃO
               ENCERRADO' : 'AGUARDANDO INÍCIO') }}</span>
@@ -119,22 +132,19 @@
                 <tr>
                   <th class="p-4 text-xs font-extrabold text-slate-500 uppercase tracking-widest">Valor</th>
                   <th class="p-4 text-xs font-extrabold text-slate-500 uppercase tracking-widest">Data</th>
-                  <th class="p-4 text-xs font-extrabold text-slate-500 uppercase tracking-widest text-right">Licitante
-                    (ID)
-                  </th>
+                  <th class="p-4 text-xs font-extrabold text-slate-500 uppercase tracking-widest text-right">Licitante</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50 bg-slate-50/50 dark:bg-slate-900/20">
                 <tr *ngFor="let bid of auction.recentBids" class="hover:bg-indigo-500/5 transition">
                   <td class="p-4 "
                     [ngClass]="bid.bidderId === currentUserId ? 'text-green-500 font-black' : 'text-indigo-600 dark:text-indigo-400 font-bold'">
-                    {{ bid.amount | currency }}
+                    {{ bid.amount | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}
                     <span *ngIf="bid.bidderId === currentUserId"
                       class="ml-2 text-[10px] bg-green-500/20 px-2 py-0.5 rounded-full uppercase">Seu Lance</span>
                   </td>
-                  <td class="p-4 text-slate-600 dark:text-slate-300">{{ bid.placeAt | date:'medium' }}</td>
-                  <td class="p-4 text-slate-500 dark:text-slate-400 text-right font-mono text-xs">{{ bid.bidderId ||
-                    'Anônimo' }}</td>
+                  <td class="p-4 text-slate-600 dark:text-slate-300">{{ bid.placeAt | date:'medium':undefined:'pt-BR' }}</td>
+                  <td class="p-4 text-slate-500 dark:text-slate-400 text-right font-mono text-xs">{{ bid.bidderName || 'Anônimo' }}</td>
                 </tr>
               </tbody>
             </table>

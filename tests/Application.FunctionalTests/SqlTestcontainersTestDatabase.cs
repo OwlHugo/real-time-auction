@@ -1,44 +1,34 @@
-﻿using System.Data.Common;
-using RealTimeAuction.Infrastructure.Data;
-using Microsoft.Data.SqlClient;
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Npgsql;
+using RealTimeAuction.Infrastructure.Data;
 using Respawn;
-using Testcontainers.MsSql;
+using Testcontainers.PostgreSql;
 
 namespace RealTimeAuction.Application.FunctionalTests;
 
 public class SqlTestcontainersTestDatabase : ITestDatabase
 {
-    private const string DefaultDatabase = "RealTimeAuctionTestDb";
-    private readonly MsSqlContainer _container;
+    private readonly PostgreSqlContainer _container;
     private DbConnection _connection = null!;
     private string _connectionString = null!;
     private Respawner _respawner = null!;
 
     public SqlTestcontainersTestDatabase()
     {
-        _container = new MsSqlBuilder()
-            .WithAutoRemove(true)
-            .Build();
+        _container = new PostgreSqlBuilder("postgres:16-alpine").WithAutoRemove(true).Build();
     }
 
     public async Task InitialiseAsync()
     {
         await _container.StartAsync();
-        await _container.ExecScriptAsync($"CREATE DATABASE {DefaultDatabase}");
+        _connectionString = _container.GetConnectionString();
 
-        var builder = new SqlConnectionStringBuilder(_container.GetConnectionString())
-        {
-            InitialCatalog = DefaultDatabase
-        };
-
-        _connectionString = builder.ConnectionString;
-
-        _connection = new SqlConnection(_connectionString);
+        _connection = new NpgsqlConnection(_connectionString);
 
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseSqlServer(_connectionString)
+            .UseNpgsql(_connectionString)
             .ConfigureWarnings(warnings => warnings.Log(RelationalEventId.PendingModelChangesWarning))
             .Options;
 
@@ -47,23 +37,15 @@ public class SqlTestcontainersTestDatabase : ITestDatabase
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
 
-        _respawner = await Respawner.CreateAsync(_connectionString);
+        await _connection.OpenAsync();
+        _respawner = await Respawner.CreateAsync(_connection, new RespawnerOptions { DbAdapter = DbAdapter.Postgres });
     }
 
-    public DbConnection GetConnection()
-    {
-        return _connection;
-    }
+    public DbConnection GetConnection() => _connection;
 
-    public string GetConnectionString()
-    {
-        return _connectionString;
-    }
+    public string GetConnectionString() => _connectionString;
 
-    public async Task ResetAsync()
-    {
-        await _respawner.ResetAsync(_connectionString);
-    }
+    public async Task ResetAsync() => await _respawner.ResetAsync(_connection);
 
     public async Task DisposeAsync()
     {

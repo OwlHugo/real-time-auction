@@ -6,6 +6,6 @@ public class PlaceBidCommandValidator : AbstractValidator<PlaceBidCommand>
     {
         RuleFor(v => v.AuctionId).GreaterThan(0);
 
-        RuleFor(v => v.Amount).GreaterThan(0).WithMessage("Bid amount must be positive.");
+        RuleFor(v => v.Amount).GreaterThan(0).WithMessage("O valor do lance deve ser positivo.");
     }
 }

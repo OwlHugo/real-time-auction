@@ -73,7 +73,7 @@ public class GetAuctionsQueryHandler : IRequestHandler<GetAuctionsQuery, Paginat
         };
 
         return await PaginatedList<AuctionDto>.CreateAsync(
-            query.Select(a => _mapper.Map<AuctionDto>(a)),
+            query.ProjectTo<AuctionDto>(_mapper.ConfigurationProvider),
             request.Page,
             request.PageSize,
             cancellationToken
